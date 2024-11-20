@@ -5,6 +5,19 @@ This project demonstrates a leader election mechanism using ZooKeeper in two dif
 2. **Custom Implementation**: A manually implemented leader election mechanism directly using the ZooKeeper API.
 
 ---
+To represent this tree with two branches as characters, we can use a simple ASCII-based structure. Here's how it could look:
+
+``` css
+*-- Add README.md (master & origin)
+|
+|    *-- My leader Election (my_leader_election branch)
+|    |
+*----- Improvement
+|
+*----- Dependency Injection
+|
+*----- First Commit
+```
 
 ## Project Structure
 The project is divided into two branches, each implementing a leader election mechanism:
