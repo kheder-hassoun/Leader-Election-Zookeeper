@@ -1,47 +1,107 @@
 package me.zookeeper.leader_election;
-import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.recipes.leader.LeaderSelector;
-import org.apache.curator.framework.recipes.leader.LeaderSelectorListenerAdapter;
+import org.apache.zookeeper.*;
+import org.apache.zookeeper.data.Stat;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
-@Service
-public class LeaderElectionService extends LeaderSelectorListenerAdapter {
-
+import java.io.IOException;
+import java.util.List;
+@Component
+public class LeaderElectionService implements Watcher {
+    private final ZooKeeper zk;
+    private final String serviceName;
+    private String currentNodePath;
+    private String leaderNodePath;
     private boolean isLeader = false;
-    // ****************** explanation **************************
-//client:
-//    The Curator client that communicates with Zookeeper.
-//       path: The path in Zookeeper where the leader election will take place. In this case, it's /leader-election.
-//       this: This refers to the LeaderElectionService class, which implements the LeaderSelectorListenerAdapter methods to define what happens when the instance becomes the leader.
-//    Requeue and Start:
-//     leaderSelector.autoRequeue(): This allows the client to automatically rejoin the leader election if it loses leadership, making the service resilient.
-//     leaderSelector.start(): Starts the leader election process.
-//
-//
-    public LeaderElectionService(CuratorFramework client, @Value("${spring.application.name}") String serviceName) {
-        String path = "/leader-election";
-        LeaderSelector leaderSelector = new LeaderSelector(client, path, this);
-        leaderSelector.autoRequeue();
-        leaderSelector.start();
+    @Value("${zookeeper.connection}")
+    private String zkConnectionString;
 
-        System.out.println(serviceName + " has joined the leader election at path: " + path);
+    private static final String LEADER_ELECTION_PATH = "/leader-election";
+
+    public LeaderElectionService(@Value("${spring.application.name}") String serviceName) throws IOException, KeeperException, InterruptedException {
+        this.serviceName = serviceName;
+        this.zk = new ZooKeeper("192.168.10.133:2181", 10000, this);
+
+        // Ensure the leader-election path exists
+        if (zk.exists(LEADER_ELECTION_PATH, false) == null) {
+            zk.create(LEADER_ELECTION_PATH, new byte[0], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+        }
+
+        startLeaderElection();
+    }
+
+    private void startLeaderElection() throws KeeperException, InterruptedException {
+        // Create an ephemeral sequential node
+        currentNodePath = zk.create(LEADER_ELECTION_PATH + "/node_", new byte[0], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL_SEQUENTIAL);
+        System.out.println(serviceName + " has joined the leader election, node path: " + currentNodePath);
+
+        // Check if this node is the leader
+        checkLeader();
+    }
+
+    private void checkLeader() throws KeeperException, InterruptedException {
+        List<String> children = zk.getChildren(LEADER_ELECTION_PATH, false);
+        children.sort(String::compareTo);
+
+        leaderNodePath = LEADER_ELECTION_PATH + "/" + children.get(0);
+
+        if (currentNodePath.equals(leaderNodePath)) {
+            becomeLeader();
+        } else {
+            System.out.println(serviceName + " is not the leader. Watching node: " + leaderNodePath);
+            zk.exists(leaderNodePath, true);  // Watch leader node for deletion
+        }
+    }
+
+    private void becomeLeader() {
+        isLeader = true;
+        System.out.println(serviceName + " is now the leader!");
+
+        // Start a separate thread to hold leadership
+        new Thread(() -> {
+            try {
+                while (isLeader) {
+                    Thread.sleep(1000);  // Simulate doing leader work
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                e.printStackTrace();
+            } finally {
+                relinquishLeadership();
+            }
+        }).start();
+    }
+
+    private void relinquishLeadership() {
+        isLeader = false;
+        System.out.println(serviceName + " is relinquishing leadership.");
     }
 
     @Override
-    public void takeLeadership(CuratorFramework client) throws Exception {
-        isLeader = true;
-        System.out.println("This instance is now the leader!");
-        try {
-           // Thread.sleep(1000);
-            Thread.sleep(Long.MAX_VALUE); // Simulate holding leadership
-        } finally {
-            isLeader = false;
-            System.out.println("Leadership relinquished.");
+    public void process(WatchedEvent event) {
+        if (event.getType() == Event.EventType.NodeDeleted && event.getPath().equals(leaderNodePath)) {
+            try {
+                checkLeader();  // Re-check leader election if the leader node is deleted
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 
     public boolean isLeader() {
         return isLeader;
+    }
+
+    public String getLeaderNodePath() {
+        return leaderNodePath;
+    }
+
+    public String getCurrentNodePath() {
+        return currentNodePath;
+    }
+
+    public void close() throws InterruptedException {
+        zk.close();
     }
 }

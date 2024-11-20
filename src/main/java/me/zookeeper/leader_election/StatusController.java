@@ -1,4 +1,5 @@
 package me.zookeeper.leader_election;
+import org.apache.zookeeper.KeeperException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -11,8 +12,11 @@ public class StatusController {
     }
 
     @GetMapping("/status")
-    public String getStatus() {
-        if (leaderElectionService.isLeader()) {
+    public String getStatus() throws KeeperException, InterruptedException {
+        // Retrieve the leader node path from LeaderElectionService
+        String leaderNodePath = leaderElectionService.getLeaderNodePath();
+
+        if (leaderNodePath != null && leaderNodePath.equals(leaderElectionService.getCurrentNodePath())) {
             return "I am the leader!";
         } else {
             return "I am a worker.";
