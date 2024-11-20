@@ -2,18 +2,21 @@ package me.zookeeper.leader_election;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderSelector;
 import org.apache.curator.framework.recipes.leader.LeaderSelectorListenerAdapter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
-public class LeaderElectionService  extends LeaderSelectorListenerAdapter {
+public class LeaderElectionService extends LeaderSelectorListenerAdapter {
 
     private boolean isLeader = false;
 
-    public LeaderElectionService (CuratorFramework client) {
+    public LeaderElectionService(CuratorFramework client, @Value("${spring.application.name}") String serviceName) {
+        String path = "/leader-election"; // Zookeeper path for leader election
+        LeaderSelector leaderSelector = new LeaderSelector(client, path, this);
+        leaderSelector.autoRequeue();
+        leaderSelector.start();
 
-        LeaderSelector leaderSelector = new LeaderSelector(client, "/leaderElection", this);
-        leaderSelector.autoRequeue(); // Automatically requeue after losing leadership
-        leaderSelector.start(); // Start the leader election process
+        System.out.println(serviceName + " has joined the leader election at path: " + path);
     }
 
     @Override
@@ -21,7 +24,8 @@ public class LeaderElectionService  extends LeaderSelectorListenerAdapter {
         isLeader = true;
         System.out.println("This instance is now the leader!");
         try {
-            Thread.sleep(Long.MAX_VALUE); // Hold leadership until interrupted
+           // Thread.sleep(1000);
+            Thread.sleep(Long.MAX_VALUE); // Simulate holding leadership
         } finally {
             isLeader = false;
             System.out.println("Leadership relinquished.");

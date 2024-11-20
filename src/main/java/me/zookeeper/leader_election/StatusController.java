@@ -12,6 +12,10 @@ public class StatusController {
 
     @GetMapping("/status")
     public String getStatus() {
-        return leaderElectionService.isLeader() ? "Leader" : "Worker";
+        if (leaderElectionService.isLeader()) {
+            return "I am the leader!";
+        } else {
+            return "I am a worker.";
+        }
     }
 }
