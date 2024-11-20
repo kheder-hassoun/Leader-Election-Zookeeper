@@ -9,9 +9,18 @@ import org.springframework.stereotype.Service;
 public class LeaderElectionService extends LeaderSelectorListenerAdapter {
 
     private boolean isLeader = false;
-
+    // ****************** explanation **************************
+//client:
+//    The Curator client that communicates with Zookeeper.
+//       path: The path in Zookeeper where the leader election will take place. In this case, it's /leader-election.
+//       this: This refers to the LeaderElectionService class, which implements the LeaderSelectorListenerAdapter methods to define what happens when the instance becomes the leader.
+//    Requeue and Start:
+//     leaderSelector.autoRequeue(): This allows the client to automatically rejoin the leader election if it loses leadership, making the service resilient.
+//     leaderSelector.start(): Starts the leader election process.
+//
+//
     public LeaderElectionService(CuratorFramework client, @Value("${spring.application.name}") String serviceName) {
-        String path = "/leader-election"; // Zookeeper path for leader election
+        String path = "/leader-election";
         LeaderSelector leaderSelector = new LeaderSelector(client, path, this);
         leaderSelector.autoRequeue();
         leaderSelector.start();
