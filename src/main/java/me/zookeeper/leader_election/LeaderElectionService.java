@@ -40,19 +40,39 @@ public class LeaderElectionService implements Watcher {
         checkLeader();
     }
 
+    /// **************  this to prevent herd effect  *********************
     private void checkLeader() throws KeeperException, InterruptedException {
         List<String> children = zk.getChildren(LEADER_ELECTION_PATH, false);
         children.sort(String::compareTo);
 
-        leaderNodePath = LEADER_ELECTION_PATH + "/" + children.get(0);
-
-        if (currentNodePath.equals(leaderNodePath)) {
+        int index = children.indexOf(currentNodePath.substring(LEADER_ELECTION_PATH.length() + 1));
+        if (index == 0) {
+            // This node is the leader
+            leaderNodePath = currentNodePath;
             becomeLeader();
         } else {
-            System.out.println(serviceName + " is not the leader. Watching node: " + leaderNodePath);
-            zk.exists(leaderNodePath, true);  // Watch leader node for deletion
+            // Watch the immediate predecessor
+            String predecessorNodePath = LEADER_ELECTION_PATH + "/" + children.get(index - 1);
+            System.out.println(serviceName + " is not the leader. Watching node: " + predecessorNodePath);
+            zk.exists(predecessorNodePath, true);  // Watch the immediate predecessor
         }
     }
+
+
+//    private void checkLeader() throws KeeperException, InterruptedException {
+//        List<String> children = zk.getChildren(LEADER_ELECTION_PATH, false);
+//        children.sort(String::compareTo);
+//
+//
+//        leaderNodePath = LEADER_ELECTION_PATH + "/" + children.get(0);
+//
+//        if (currentNodePath.equals(leaderNodePath)) {
+//            becomeLeader();
+//        } else {
+//            System.out.println(serviceName + " is not the leader. Watching node: " + leaderNodePath);
+//            zk.exists(leaderNodePath, true);  // Watch leader node for deletion
+//        }
+//    }
 
     private void becomeLeader() {
         isLeader = true;
